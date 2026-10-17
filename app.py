@@ -1,6 +1,10 @@
-"""Flask web application for hand-sign digit recognition."""
-# Importing required libs
+"""Flask web application for hand-sign digit recognition.
+
+Serves an upload form and returns the digit predicted by the trained
+Keras model for an uploaded hand-sign image.
+"""
 from flask import Flask, render_template, request
+from PIL import UnidentifiedImageError
 from model import preprocess_img, predict_result
 
 # Instantiating flask app
@@ -17,14 +21,17 @@ def main():
 # Prediction route
 @app.route('/prediction', methods=['POST'])
 def predict_image_file():
-    """Process the uploaded image and display the prediction."""
+    """Process the uploaded image and display the prediction.
+    
+    Returns:
+        Rendered HTML page with the predicted digit or an error message.
+    """
     try:
-        if request.method == 'POST':
-            img = preprocess_img(request.files['file'].stream)
-            pred = predict_result(img)
-            return render_template("result.html", predictions=str(pred))
+        img = preprocess_img(request.files['file'].stream)
+        pred = predict_result(img)
+        return render_template("result.html", predictions=str(pred))
 
-    except:
+    except(KeyError, UnidentifiedImageError, ValueError, OSError):
         error = "File cannot be processed."
         return render_template("result.html", err=error)
 
