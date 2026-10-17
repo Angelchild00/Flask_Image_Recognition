@@ -22,7 +22,7 @@ def main():
 @app.route('/prediction', methods=['POST'])
 def predict_image_file():
     """Process the uploaded image and display the prediction.
-    
+
     Returns:
         Rendered HTML page with the predicted digit or an error message.
     """
