@@ -1,0 +1,13 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Test / tool caches
+.pytest_cache/
+
+# IDE settings
+.idea/
+.vscode/
