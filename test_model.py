@@ -1,68 +1,63 @@
-import os
-import pytest
+"""Tests for the preprocessing and prediction functions in model.py."""
+from io import BytesIO
+from unittest.mock import MagicMock, patch
+
 import numpy as np
-from keras.models import load_model
-from model import preprocess_img, predict_result  # Adjust based on your structure
+import pytest
+from PIL import UnidentifiedImageError
 
-# Load the model before tests run
-@pytest.fixture(scope="module")
-def model():
-    """Load the model once for all tests."""
-    model = load_model("digit_model.h5")  # Adjust path as needed
-    return model
-
-# Basic Tests
-
-def test_preprocess_img():
-    """Test the preprocess_img function."""
-    img_path = "test_images/2/Sign 2 (97).jpeg"
-    processed_img = preprocess_img(img_path)
-
-    # Check that the output shape is as expected
-    assert processed_img.shape == (1, 224, 224, 3), "Processed image shape should be (1, 224, 224, 3)"
-
-    # Check that values are normalized (between 0 and 1)
-    assert np.min(processed_img) >= 0 and np.max(processed_img) <= 1, "Image pixel values should be normalized between 0 and 1"
+from conftest import SAMPLE_IMAGE
+from model import preprocess_img, predict_result
 
 
-def test_predict_result(model):
-    """Test the predict_result function."""
-    img_path = "test_images/4/Sign 4 (92).jpeg"  # Ensure the path is correct
-    processed_img = preprocess_img(img_path)
+# preprocess_img
 
-    # Make a prediction
-    prediction = predict_result(processed_img)
-
-    # Print the prediction for debugging
-    print(f"Prediction: {prediction} (Type: {type(prediction)})")
-
-    # Check that the prediction is an integer (convert if necessary)
-    assert isinstance(prediction, (int, np.integer)), "Prediction should be an integer class index"
+def test_preprocess_output_shape_and_range():
+    """A real JPEG becomes a (1, 224, 224, 3) array scaled to 0-1."""
+    result = preprocess_img(SAMPLE_IMAGE)
+    assert result.shape == (1, 224, 224, 3)
+    assert result.min() >= 0.0
+    assert result.max() <= 1.0
 
 
-# Advanced Tests
+def test_preprocess_accepts_file_stream(make_image):
+    """preprocess_img works with a file-like object, as Flask passes."""
+    result = preprocess_img(make_image(size=(500, 300)))
+    assert result.shape == (1, 224, 224, 3)
 
-def test_invalid_image_path():
-    """Test preprocess_img with an invalid image path."""
+
+def test_preprocess_rejects_non_image():
+    """Bytes that are not an image raise UnidentifiedImageError."""
+    with pytest.raises(UnidentifiedImageError):
+        preprocess_img(BytesIO(b"not an image"))
+
+
+def test_preprocess_missing_file_raises():
+    """A path that does not exist raises FileNotFoundError."""
     with pytest.raises(FileNotFoundError):
-        preprocess_img("invalid/path/to/image.jpeg")
+        preprocess_img("test_images/does_not_exist.jpeg")
 
-def test_image_shape_on_prediction(model):
-    """Test the prediction output shape."""
-    img_path = "test_images/5/Sign 5 (86).jpeg"  # Ensure the path is correct
-    processed_img = preprocess_img(img_path)
 
-    # Ensure that the prediction output is an integer
-    prediction = predict_result(processed_img)
-    assert isinstance(prediction, (int, np.integer)), "The prediction should be an integer"
+# predict_result
 
-def test_model_predictions_consistency(model):
-    """Test that predictions for the same input are consistent."""
-    img_path = "test_images/7/Sign 7 (54).jpeg"
-    processed_img = preprocess_img(img_path)
+def test_predict_result_returns_argmax():
+    """predict_result returns the index of the highest probability.
 
-    # Make multiple predictions
-    predictions = [predict_result(processed_img) for _ in range(5)]
+    The Keras model is replaced with a mock so the test is fast and
+    the expected answer is known.
+    """
+    fake_probs = np.zeros((1, 10))
+    fake_probs[0, 4] = 0.9
+    fake_model = MagicMock()
+    fake_model.predict.return_value = fake_probs
 
-    # Check that all predictions are the same
-    assert all(p == predictions[0] for p in predictions), "Predictions for the same input should be consistent"
+    with patch("model.model", fake_model):
+        assert predict_result(np.zeros((1, 224, 224, 3))) == 4
+    fake_model.predict.assert_called_once()
+
+
+def test_predict_result_real_model_gives_valid_digit():
+    """The real model returns an integer class between 0 and 9."""
+    prediction = predict_result(preprocess_img(SAMPLE_IMAGE))
+    assert isinstance(prediction, (int, np.integer))
+    assert 0 <= prediction <= 9
