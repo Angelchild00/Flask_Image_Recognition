@@ -61,3 +61,13 @@ def test_predict_result_real_model_gives_valid_digit():
     prediction = predict_result(preprocess_img(SAMPLE_IMAGE))
     assert isinstance(prediction, (int, np.integer))
     assert 0 <= prediction <= 9
+
+@pytest.mark.parametrize("mode", ["RGBA", "L"])
+def test_preprocess_handles_non_rgb_images(make_image, mode):
+    """Transparent (RGBA) and grayscale (L) images are converted to RGB.
+
+    The model expects exactly 3 colour channels, so other modes must be
+    converted before reshaping.
+    """
+    result = preprocess_img(make_image(mode=mode))
+    assert result.shape == (1, 224, 224, 3)
